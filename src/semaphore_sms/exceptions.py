@@ -1,0 +1,2 @@
+class SemaphoreException(Exception):
+    pass
