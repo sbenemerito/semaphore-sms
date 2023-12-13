@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "semaphore_sms"
+version = "1.0.0"
+authors = [
+  { name="Sam Benemerito", email="sbbenemerito@gmail.com" },
+]
+description = "API wrapper for https://semaphore.co/"
+keywords = ["semaphore", "semaphore sms", "semaphore ph"]
+readme = "README.md"
+requires-python = ">=3.7.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "requests >= 2.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/sbenemerito/semaphore-sms"
+Issues = "https://github.com/sbenemerito/semaphore-sms/issues"
+"Semaphore SMS Gateway" = "https://semaphore.co/"
