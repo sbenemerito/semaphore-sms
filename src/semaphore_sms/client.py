@@ -2,8 +2,6 @@ import os
 import re
 from typing import Dict, List, MutableMapping, Optional, Union
 
-from requests import Response
-
 from semaphore_sms.exceptions import SemaphoreException
 from semaphore_sms.http import HttpClient
 
@@ -44,7 +42,7 @@ class SemaphoreClient(object):
         data: Optional[Dict[str, object]] = None,
         timeout: float = 10,
         allow_redirects: bool = False,
-    ) -> Response:
+    ) -> dict:
         """
         Makes a request to the Semaphore API.
 
@@ -74,7 +72,7 @@ class SemaphoreClient(object):
 
         raise SemaphoreException(f'Request failed: HTTP {response.status_code} {response.text}')
 
-    def get(self, uri: str, params: Dict[str, object] = dict()) -> Response:
+    def get(self, uri: str, params: Dict[str, object] = dict()) -> dict:
         params = {
             **params,
             'apikey': self.api_key  # automatically add apikey as query param
@@ -83,7 +81,7 @@ class SemaphoreClient(object):
 
         return self.request('get', uri, params, None)
 
-    def post(self, uri: str, data: Dict[str, object] = dict()) -> Response:
+    def post(self, uri: str, data: Dict[str, object] = dict()) -> dict:
         data = {
             **data,
             'apikey': self.api_key,  # automatically add apikey in request data

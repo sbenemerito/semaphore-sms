@@ -14,20 +14,25 @@ _logger = logging.getLogger('semaphore.http_client')
 
 
 class HttpResponse(object):
+    """
+    HttpResponse mocker class for tests
+    """
     def __init__(
         self,
         status_code: int,
-        text: str,
+        content: object,
         headers: Optional[Any] = None,
     ):
-        self.content = text
+        self.content = content
         self.headers = headers
-        self.cached = False
         self.status_code = status_code
         self.ok = self.status_code < 400
 
     @property
     def text(self) -> str:
+        return str(self.content)
+
+    def json(self) -> dict:
         return self.content
 
     def __repr__(self) -> str:
