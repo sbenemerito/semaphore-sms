@@ -103,7 +103,7 @@ class SemaphoreClient(object):
         clean_number = ''.join(number.split('-')).strip()
         return re.match(r'^(\+?639|09)\d{9}$', clean_number)
 
-    def send(self, message: str, recipients: Union[str, List[str]], sender_name: Optional[str] = None):
+    def send(self, message: str, recipients: List[str], sender_name: Optional[str] = None):
         """
         Used for hitting the send message endpoints (single and bulk).
         https://semaphore.co/docs#sending_messages
@@ -120,10 +120,6 @@ class SemaphoreClient(object):
         if not message.strip():
             raise SemaphoreException('Cannot send a blank message')
 
-        # small hack so `recipients` is always a list, so we don't have to do multiple `if`s
-        if isinstance(recipients, str):
-            recipients = [recipients, ]
-
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
             raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
 
@@ -136,7 +132,7 @@ class SemaphoreClient(object):
             }
         )
 
-    def priority(self, message: str, recipients: Union[str, List[str]], sender_name: Optional[str] = None):
+    def priority(self, message: str, recipients: List[str], sender_name: Optional[str] = None):
         """
         Used for hitting the PRIORITY send message endpoint.
         Similar to the normal send message endpoint, except that this takes more credits,
@@ -155,10 +151,6 @@ class SemaphoreClient(object):
         if not message.strip():
             raise SemaphoreException('Cannot send a blank message')
 
-        # small hack so `recipients` is always a list, so we don't have to do multiple `if`s
-        if isinstance(recipients, str):
-            recipients = [recipients, ]
-
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
             raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
 
@@ -171,7 +163,7 @@ class SemaphoreClient(object):
             }
         )
 
-    def otp(self, recipients: Union[str, List[str]], message: Optional[str] = None,
+    def otp(self, recipients: List[str], message: Optional[str] = None,
             sender_name: Optional[str] = None, code: Optional[Union[int, str]] = None):
         """
         Used for hitting the OTP message endpoint.
@@ -188,10 +180,6 @@ class SemaphoreClient(object):
         :returns: Response from the Semaphore API
         """
         sender_name = sender_name or self.sender_name
-
-        # small hack so `recipients` is always a list, so we don't have to do multiple `if`s
-        if isinstance(recipients, str):
-            recipients = [recipients, ]
 
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
             raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
