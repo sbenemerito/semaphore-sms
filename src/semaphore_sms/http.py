@@ -31,7 +31,7 @@ class HttpResponse(object):
         return self.content
 
     def __repr__(self) -> str:
-        return "HTTP {} {}".format(self.status_code, self.content)
+        return 'HTTP {} {}'.format(self.status_code, self.content)
 
 
 class HttpClient:
@@ -122,11 +122,7 @@ class HttpClient:
 
         self.log_response(response.status_code, response)
 
-        return HttpResponse(
-            int(response.status_code),
-            response.text,
-            response.headers,
-        )
+        return response
 
     def log_request(self, kwargs: Dict[str, Any]) -> None:
         """
