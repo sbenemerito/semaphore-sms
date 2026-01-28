@@ -1,13 +1,15 @@
 # semaphore-sms
 
+[![CI](https://github.com/sbenemerito/semaphore-sms/actions/workflows/ci.yml/badge.svg)](https://github.com/sbenemerito/semaphore-sms/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sbenemerito/semaphore-sms/branch/main/graph/badge.svg)](https://codecov.io/gh/sbenemerito/semaphore-sms)
 [![PyPI](https://img.shields.io/pypi/v/semaphore-sms.svg)](https://pypi.python.org/pypi/semaphore-sms)
-[![PyPI](https://img.shields.io/pypi/pyversions/semaphore-sms.svg)](https://pypi.python.org/pypi/semaphore-sms)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 
 API wrapper for [Semaphore SMS Gateway](https://semaphore.co/). The documentation for their API can be found [here](https://semaphore.co/docs).
 
 ## Installation
 
-This library should be able to support Python versions >= 3.7.
+This library supports Python versions >= 3.7.
 
 Install from PyPi using [pip](https://pip.pypa.io/en/latest/) via
 
@@ -28,7 +30,7 @@ from semaphore_sms import SemaphoreClient
 
 client = SemaphoreClient(
     api_key='your_api_key',
-    sender_name'sender_name',
+    sender_name='sender_name',
 )
 ```
 
@@ -105,6 +107,50 @@ users = client.users(
 ```
 
 Again, you can see sample responses in tests/test_semaphore_client.py
+
+## Error Handling
+
+The library provides a comprehensive exception hierarchy for handling different error scenarios:
+
+```
+SemaphoreException (base)
+├── AuthenticationError     # Missing or invalid API credentials
+├── ValidationError         # Client-side validation failures
+│   ├── InvalidPhoneNumberError  # Invalid Philippine phone format
+│   └── EmptyMessageError        # Blank message content
+└── APIError               # Server returned an error response
+    ├── AuthorizationError # 401/403 responses
+    ├── RateLimitError     # 429 responses (includes retry_after)
+    ├── ServerError        # 5xx responses
+    └── NetworkError       # Connection/timeout failures
+```
+
+### Example Usage
+
+```python
+from semaphore_sms import SemaphoreClient
+from semaphore_sms.exceptions import (
+    AuthenticationError,
+    InvalidPhoneNumberError,
+    RateLimitError,
+    SemaphoreException,
+)
+
+try:
+    client = SemaphoreClient(api_key='your_api_key')
+    client.send(message='Hello', recipients=['09991234567'])
+except AuthenticationError:
+    print("Invalid API key")
+except InvalidPhoneNumberError as e:
+    print(f"Invalid phone numbers: {e.recipients}")
+except RateLimitError as e:
+    if e.retry_after:
+        print(f"Rate limited. Retry after {e.retry_after} seconds")
+except SemaphoreException as e:
+    print(f"Semaphore error: {e}")
+```
+
+All exceptions inherit from `SemaphoreException`, so you can catch all library errors with a single except block for backward compatibility.
 
 ## Tests
 
