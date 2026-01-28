@@ -164,6 +164,8 @@ PYTHONPATH=src python -m unittest
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/sbenemerito/semaphore-sms/
 
+*Note: Yes, I'm currently pushing directly to main - I know, I know. When contributors come around, I'll enforce proper branch protection and PR workflows 🙇‍♂️*
+
 ## License
 
 The library is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
