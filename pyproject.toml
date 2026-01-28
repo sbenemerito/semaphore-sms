@@ -11,15 +11,21 @@ authors = [
 description = "API wrapper for https://semaphore.co/"
 keywords = ["semaphore", "semaphore sms", "semaphore ph"]
 readme = "README.md"
-requires-python = ">=3.7.0"
+requires-python = ">=3.7"
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Communications :: Telephony",
 ]
@@ -27,7 +33,22 @@ dependencies = [
   "requests >= 2.0.0"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "flake8>=7.0.0",
+]
+test = [
+    "coverage>=7.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/sbenemerito/semaphore-sms"
 Issues = "https://github.com/sbenemerito/semaphore-sms/issues"
 "Semaphore SMS Gateway" = "https://semaphore.co/"
+
+[tool.coverage.run]
+source = ["semaphore_sms"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
