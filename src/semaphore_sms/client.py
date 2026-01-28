@@ -2,10 +2,18 @@ import os
 import re
 from typing import Dict, List, MutableMapping, Optional, Union
 
-from semaphore_sms.exceptions import SemaphoreException
+from semaphore_sms.exceptions import (
+    APIError,
+    AuthenticationError,
+    AuthorizationError,
+    EmptyMessageError,
+    InvalidPhoneNumberError,
+    RateLimitError,
+    ServerError,
+)
 from semaphore_sms.http import HttpClient
 
-BASE_URI = 'http://api.semaphore.co/api/v4/'
+BASE_URI = "http://api.semaphore.co/api/v4/"
 
 
 class SemaphoreClient(object):
@@ -25,11 +33,11 @@ class SemaphoreClient(object):
         :param environment: Environment to look for auth details, defaults to os.environ
         """
         environment = environment or os.environ
-        self.api_key = api_key or environment.get('SEMAPHORE_SMS_APIKEY')
-        self.sender_name = sender_name or environment.get('SEMAPHORE_SMS_SENDERNAME')
+        self.api_key = api_key or environment.get("SEMAPHORE_SMS_APIKEY")
+        self.sender_name = sender_name or environment.get("SEMAPHORE_SMS_SENDERNAME")
 
         if not self.api_key:
-            raise SemaphoreException('Credentials are required to create a SemaphoreClient')
+            raise AuthenticationError("Credentials are required to create a SemaphoreClient")
 
         self.http_client = HttpClient()
         self._account = None
@@ -55,7 +63,7 @@ class SemaphoreClient(object):
 
         :returns: Response from the Semaphore API
         """
-        uri = f'{BASE_URI}{uri}/'
+        uri = f"{BASE_URI}{uri}/"
         response = self.http_client.request(
             method,
             uri,
@@ -70,36 +78,47 @@ class SemaphoreClient(object):
             # and won't handle probable case of not receiving JSON type (YAGNI)
             return response.json()
 
-        raise SemaphoreException(f'Request failed: HTTP {response.status_code} {response.text}')
+        status_code = response.status_code
+        response_text = response.text
+
+        if status_code in (401, 403):
+            raise AuthorizationError(status_code, response_text)
+        elif status_code == 429:
+            retry_after = response.headers.get("Retry-After") if hasattr(response, "headers") else None
+            raise RateLimitError(status_code, response_text, retry_after=retry_after)
+        elif 500 <= status_code < 600:
+            raise ServerError(status_code, response_text)
+        else:
+            raise APIError(status_code, response_text)
 
     def get(self, uri: str, params: Dict[str, object] = dict()) -> dict:
         params = {
             **params,
-            'apikey': self.api_key  # automatically add apikey as query param
+            "apikey": self.api_key,  # automatically add apikey as query param
         }
         params = {k: v for k, v in params.items() if v is not None}
 
-        return self.request('get', uri, params, None)
+        return self.request("get", uri, params, None)
 
     def post(self, uri: str, data: Dict[str, object] = dict()) -> dict:
         data = {
             **data,
-            'apikey': self.api_key,  # automatically add apikey in request data
-            'sendername': self.sender_name,  # automatically add sender_name in request data
+            "apikey": self.api_key,  # automatically add apikey in request data
+            "sendername": self.sender_name,  # automatically add sender_name in request data
         }
         data = {k: v for k, v in data.items() if v is not None}
 
         # make sure we re-fetch `account` next time it's called because a transaction has been triggered
         self._account = None
 
-        return self.request('post', uri, None, data)
+        return self.request("post", uri, None, data)
 
     def validate_phone_format(self, number: Union[str, List[str]]):
         """
         Philippine phone number validation, solely based on prefix and length
         """
-        clean_number = ''.join(number.split('-')).strip()
-        return re.match(r'^(\+?639|09)\d{9}$', clean_number)
+        clean_number = "".join(number.split("-")).strip()
+        return re.match(r"^(\+?639|09)\d{9}$", clean_number)
 
     def send(self, message: str, recipients: List[str], sender_name: Optional[str] = None):
         """
@@ -116,18 +135,18 @@ class SemaphoreClient(object):
         sender_name = sender_name or self.sender_name
 
         if not message.strip():
-            raise SemaphoreException('Cannot send a blank message')
+            raise EmptyMessageError()
 
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
-            raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
+            raise InvalidPhoneNumberError(recipients)
 
         return self.post(
-            'messages',
+            "messages",
             {
-                'message': message,
-                'sendername': sender_name,
-                'number': ','.join(recipients)  # recipients are to be sent as a comma-separated string
-            }
+                "message": message,
+                "sendername": sender_name,
+                "number": ",".join(recipients),  # recipients are to be sent as a comma-separated string
+            },
         )
 
     def priority(self, message: str, recipients: List[str], sender_name: Optional[str] = None):
@@ -147,22 +166,27 @@ class SemaphoreClient(object):
         sender_name = sender_name or self.sender_name
 
         if not message.strip():
-            raise SemaphoreException('Cannot send a blank message')
+            raise EmptyMessageError()
 
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
-            raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
+            raise InvalidPhoneNumberError(recipients)
 
         return self.post(
-            'priority',
+            "priority",
             {
-                'message': message,
-                'sendername': sender_name,
-                'number': ','.join(recipients)  # recipients are to be sent as a comma-separated string
-            }
+                "message": message,
+                "sendername": sender_name,
+                "number": ",".join(recipients),  # recipients are to be sent as a comma-separated string
+            },
         )
 
-    def otp(self, recipients: List[str], message: Optional[str] = None,
-            sender_name: Optional[str] = None, code: Optional[Union[int, str]] = None):
+    def otp(
+        self,
+        recipients: List[str],
+        message: Optional[str] = None,
+        sender_name: Optional[str] = None,
+        code: Optional[Union[int, str]] = None,
+    ):
         """
         Used for hitting the OTP message endpoint.
         Similar to priority messaging, except this is dedicated for one-time password messages,
@@ -180,28 +204,35 @@ class SemaphoreClient(object):
         sender_name = sender_name or self.sender_name
 
         if not all([self.validate_phone_format(recipient) for recipient in recipients]):
-            raise SemaphoreException('You supplied an invalid Philippine phone number in `recipients`')
+            raise InvalidPhoneNumberError(recipients)
 
         return self.post(
-            'otp',
+            "otp",
             {
-                'message': message,
-                'sendername': sender_name,
-                'number': ','.join(recipients),  # recipients are to be sent as a comma-separated string
-                'code': code,
-            }
+                "message": message,
+                "sendername": sender_name,
+                "number": ",".join(recipients),  # recipients are to be sent as a comma-separated string
+                "code": code,
+            },
         )
 
-    def messages(self, id: Optional[Union[int, str]] = None, page: Optional[Union[int, str]] = None,
-                 limit: Optional[Union[int, str]] = None, network: Optional[str] = None,
-                 status: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    def messages(
+        self,
+        id: Optional[Union[int, str]] = None,
+        page: Optional[Union[int, str]] = None,
+        limit: Optional[Union[int, str]] = None,
+        network: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ):
         """
         Used for hitting the retrieve message(s) endpoint.
         Providing `id` shall hit the /messages/<id>/ endpoint.
         https://semaphore.co/docs#retrieving_messages
 
         :param id: Specific message ID
-        :param page: Page of results to return. 
+        :param page: Page of results to return.
         :param limit: Only take top <limit> results. Default is 100, max is 1000.
         :param network: which network the message was sent to
         :param status: delivery status
@@ -210,14 +241,14 @@ class SemaphoreClient(object):
 
         :returns: Response from the Semaphore API
         """
-        uri = f'messages/{id}' if id else 'messages'
+        uri = f"messages/{id}" if id else "messages"
         params = {
-          'page': page,
-          'limit': limit,
-          'startDate': start_date,
-          'endDate': end_date,
-          'network': network.lower() if network else None,
-          'status': status.lower() if status else None
+            "page": page,
+            "limit": limit,
+            "startDate": start_date,
+            "endDate": end_date,
+            "network": network.lower() if network else None,
+            "status": status.lower() if status else None,
         }
 
         return self.get(uri, params)
@@ -231,12 +262,9 @@ class SemaphoreClient(object):
 
         :returns: Response from the Semaphore API
         """
-        params = {
-          'page': page,
-          'limit': limit
-        }
+        params = {"page": page, "limit": limit}
 
-        return self.get('account/transactions', params)
+        return self.get("account/transactions", params)
 
     def sender_names(self, page: Optional[Union[int, str]] = None, limit: Optional[Union[int, str]] = None):
         """
@@ -247,12 +275,9 @@ class SemaphoreClient(object):
 
         :returns: Response from the Semaphore API
         """
-        params = {
-          'page': page,
-          'limit': limit
-        }
+        params = {"page": page, "limit": limit}
 
-        return self.get('account/sendernames', params)
+        return self.get("account/sendernames", params)
 
     def users(self, page: Optional[Union[int, str]] = None, limit: Optional[Union[int, str]] = None):
         """
@@ -263,12 +288,9 @@ class SemaphoreClient(object):
 
         :returns: Response from the Semaphore API
         """
-        params = {
-          'page': page,
-          'limit': limit
-        }
+        params = {"page": page, "limit": limit}
 
-        return self.get('account/users', params)
+        return self.get("account/users", params)
 
     @property
     def account(self):
@@ -277,6 +299,6 @@ class SemaphoreClient(object):
         https://semaphore.co/docs#retrieving_account
         """
         if not self._account:
-            self._account = self.get('account')
+            self._account = self.get("account")
 
         return self._account

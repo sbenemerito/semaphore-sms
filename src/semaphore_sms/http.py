@@ -7,8 +7,11 @@ from typing import (
 )
 from urllib.parse import urlencode
 
+import requests.exceptions
 from requests import Request, Response, Session
 from requests.adapters import HTTPAdapter
+
+from semaphore_sms.exceptions import NetworkError
 
 _logger = logging.getLogger('semaphore.http_client')
 
@@ -118,12 +121,18 @@ class HttpClient:
             prepped_request.url, None, None, None, None
         )
 
-        response = session.send(
-            prepped_request,
-            allow_redirects=allow_redirects,
-            timeout=timeout,
-            **settings
-        )
+        try:
+            response = session.send(
+                prepped_request,
+                allow_redirects=allow_redirects,
+                timeout=timeout,
+                **settings
+            )
+        except requests.exceptions.RequestException as e:
+            raise NetworkError(
+                message=f"Network error: {type(e).__name__}",
+                original_exception=e,
+            ) from e
 
         self.log_response(response.status_code, response)
 

@@ -3,7 +3,15 @@ import unittest
 from unittest.mock import patch
 
 from semaphore_sms import SemaphoreClient
-from semaphore_sms.exceptions import SemaphoreException
+from semaphore_sms.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    EmptyMessageError,
+    InvalidPhoneNumberError,
+    RateLimitError,
+    SemaphoreException,
+    ServerError,
+)
 from semaphore_sms.http import HttpResponse
 
 
@@ -14,11 +22,9 @@ class SemaphoreClientTestCase(unittest.TestCase):
     # CLIENT INIT TESTS
 
     def test_missing_credentials_raises_exception(self):
-        with self.assertRaises(
-            SemaphoreException,
-            msg='Credentials are required to create a SemaphoreClient'
-        ):
+        with self.assertRaises(AuthenticationError) as context:
             SemaphoreClient()
+        self.assertIn('Credentials are required', str(context.exception))
 
     def test_client_takes_creds_from_os_environ_if_unset(self):
         os.environ['SEMAPHORE_SMS_APIKEY'] = 'testkey'
@@ -124,15 +130,13 @@ class SemaphoreClientTestCase(unittest.TestCase):
         self.assertEqual(messages[1].get('source'), 'Api')
 
     def test_send_sms_invalid_phone_fails(self):
-        with self.assertRaises(
-            SemaphoreException,
-            msg='You supplied an invalid Philippine phone number in `recipients`'
-        ):
+        with self.assertRaises(InvalidPhoneNumberError) as context:
             self.client.send(
                 message='Validation failure - will not get sent to Semaphore API',
                 recipients=['123', '639980202020'],
                 sender_name='HELLO'
             )
+        self.assertEqual(context.exception.recipients, ['123', '639980202020'])
 
     # PRIORITY SMS TESTS
 
@@ -226,15 +230,13 @@ class SemaphoreClientTestCase(unittest.TestCase):
         self.assertEqual(messages[1].get('source'), 'Api')
 
     def test_priority_sms_invalid_phone_fails(self):
-        with self.assertRaises(
-            SemaphoreException,
-            msg='You supplied an invalid Philippine phone number in `recipients`'
-        ):
+        with self.assertRaises(InvalidPhoneNumberError) as context:
             self.client.priority(
                 message='Validation failure - will not get sent to Semaphore API',
                 recipients=['123', '639980202020'],
                 sender_name='HELLO'
             )
+        self.assertEqual(context.exception.recipients, ['123', '639980202020'])
 
     # OTP SMS TESTS
 
@@ -333,15 +335,13 @@ class SemaphoreClientTestCase(unittest.TestCase):
         self.assertEqual(messages[1].get('code'), 789101)
 
     def test_otp_sms_invalid_phone_fails(self):
-        with self.assertRaises(
-            SemaphoreException,
-            msg='You supplied an invalid Philippine phone number in `recipients`'
-        ):
+        with self.assertRaises(InvalidPhoneNumberError) as context:
             self.client.otp(
                 message='Validation failure - will not get sent to Semaphore API',
                 recipients=['123', '639980202020'],
                 sender_name='HELLO'
             )
+        self.assertEqual(context.exception.recipients, ['123', '639980202020'])
 
     # ACCOUNT TESTS
 
@@ -525,3 +525,69 @@ class SemaphoreClientTestCase(unittest.TestCase):
         users = self.client.users()
         self.assertEqual(len(users), 1)
         self.assertEqual(users[0].get('user_id'), 12312)
+
+    # EMPTY MESSAGE TESTS
+
+    def test_send_empty_message_fails(self):
+        with self.assertRaises(EmptyMessageError):
+            self.client.send(
+                message='   ',
+                recipients=['09980101010'],
+                sender_name='HELLO'
+            )
+
+    def test_priority_empty_message_fails(self):
+        with self.assertRaises(EmptyMessageError):
+            self.client.priority(
+                message='',
+                recipients=['09980101010'],
+                sender_name='HELLO'
+            )
+
+    # HTTP ERROR STATUS CODE TESTS
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_unauthorized_raises_authorization_error(self, mock_http_request):
+        mock_http_request.return_value = HttpResponse(401, 'Unauthorized')
+        with self.assertRaises(AuthorizationError) as context:
+            self.client.messages()
+        self.assertEqual(context.exception.status_code, 401)
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_forbidden_raises_authorization_error(self, mock_http_request):
+        mock_http_request.return_value = HttpResponse(403, 'Forbidden')
+        with self.assertRaises(AuthorizationError) as context:
+            self.client.messages()
+        self.assertEqual(context.exception.status_code, 403)
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_rate_limit_raises_rate_limit_error(self, mock_http_request):
+        response = HttpResponse(429, 'Too Many Requests')
+        response.headers = {'Retry-After': '60'}
+        mock_http_request.return_value = response
+        with self.assertRaises(RateLimitError) as context:
+            self.client.messages()
+        self.assertEqual(context.exception.status_code, 429)
+        self.assertEqual(context.exception.retry_after, 60)
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_server_error_raises_server_error(self, mock_http_request):
+        mock_http_request.return_value = HttpResponse(500, 'Internal Server Error')
+        with self.assertRaises(ServerError) as context:
+            self.client.messages()
+        self.assertEqual(context.exception.status_code, 500)
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_502_raises_server_error(self, mock_http_request):
+        mock_http_request.return_value = HttpResponse(502, 'Bad Gateway')
+        with self.assertRaises(ServerError) as context:
+            self.client.messages()
+        self.assertEqual(context.exception.status_code, 502)
+
+    # BACKWARD COMPATIBILITY TEST
+
+    @patch('semaphore_sms.http.Session.send')
+    def test_all_exceptions_catchable_as_semaphore_exception(self, mock_http_request):
+        mock_http_request.return_value = HttpResponse(500, 'Server Error')
+        with self.assertRaises(SemaphoreException):
+            self.client.messages()
